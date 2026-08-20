@@ -25,7 +25,8 @@ groq_model = st.sidebar.selectbox(
         "llama3-70b-8192",
         "llama-3.2-3b-preview",
         "mixtral-8x7b-32768",
-        "gemma2-9b-it"
+        "gemma2-9b-it",
+        "openai/gpt-oss-120b"
     ],
     index=0
 )
