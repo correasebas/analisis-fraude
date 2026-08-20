@@ -1,29 +1,34 @@
 import streamlit as st
-import streamlit.components.v1 as components
 import pandas as pd
 import plotly.express as px
-import json
 from openai import OpenAI
 from groq import Groq
 
 # Configuración de la página
 st.set_page_config(
-    page_title="Análisis de Fraude Transaccional + IA & Voz",
+    page_title="Análisis de Fraude Transaccional + IA",
     page_icon="🛡️",
     layout="wide"
 )
 
-st.title("🛡️ Dashboard de Monitoreo de Fraude con IA y Narración de Voz")
+st.title("🛡️ Dashboard de Monitoreo de Fraude con IA")
 
 # 1. Carga de Datos y Configuración de Proveedor de IA
 st.sidebar.header("⚙️ Proveedor de IA y Claves")
 
 proveedor_ia = st.sidebar.radio(
     "Selecciona el Proveedor de IA",
-    ["Groq AI", "OpenAI (Directo)"]
+    ["OpenAI (Directo)", "Groq AI"]
 )
 
-if proveedor_ia == "Groq AI":
+if proveedor_ia == "OpenAI (Directo)":
+    api_key = st.sidebar.text_input("OpenAI API Key", type="password", help="Obtén tu API key en platform.openai.com")
+    model_selected = st.sidebar.selectbox(
+        "Modelo de OpenAI",
+        ["gpt-4o-mini", "gpt-4o", "gpt-3.5-turbo"],
+        index=0
+    )
+else:
     api_key = st.sidebar.text_input("Groq API Key", type="password", help="Obtén tu API key en console.groq.com")
     model_selected = st.sidebar.selectbox(
         "Modelo en Groq",
@@ -34,13 +39,6 @@ if proveedor_ia == "Groq AI":
             "llama-3.1-8b-instant",
             "mixtral-8x7b-32768"
         ],
-        index=0
-    )
-else:
-    api_key = st.sidebar.text_input("OpenAI API Key", type="password", help="Obtén tu API key en platform.openai.com")
-    model_selected = st.sidebar.selectbox(
-        "Modelo de OpenAI",
-        ["gpt-4o-mini", "gpt-4o", "gpt-3.5-turbo"],
         index=0
     )
 
@@ -168,9 +166,9 @@ with tab3:
             )
             st.plotly_chart(fig4, use_container_width=True)
 
-# 5. Generación de Reporte con IA y Narración de Voz
+# 5. Generación de Reporte con IA
 st.markdown("---")
-st.subheader("🤖 Generación de Reporte Ejecutivo y Narración de Voz")
+st.subheader("🤖 Generación de Reporte Ejecutivo con IA")
 
 if st.button("🚀 Generar Reporte de Insights"):
     if not api_key:
@@ -203,6 +201,7 @@ if st.button("🚀 Generar Reporte de Insights"):
                 Agrega al final una sección breve con **Recomendaciones de Mitigación**.
                 """
 
+                # Inicialización del cliente según el proveedor
                 if proveedor_ia == "OpenAI (Directo)":
                     client = OpenAI(api_key=api_key)
                 else:
@@ -214,40 +213,8 @@ if st.button("🚀 Generar Reporte de Insights"):
                     temperature=0.3
                 )
 
-                reporte_texto = response.choices[0].message.content
-
                 st.success("✅ Reporte generado exitosamente:")
-                st.markdown(reporte_texto)
-
-                # Integración con Web Speech API
-                clean_text_json = json.dumps(reporte_texto)
-                tts_component = f"""
-                <div style="margin-top: 15px; padding: 10px; background-color: #f0f2f6; border-radius: 8px;">
-                    <p style="margin-bottom: 8px; font-weight: bold; color: #31333F;">🗣️ Narración con Web Speech API:</p>
-                    <button onclick="reproducirVoz()" style="background-color: #2ECC71; color: white; padding: 8px 16px; border: none; border-radius: 5px; cursor: pointer; font-size: 14px;">
-                        🔊 Escuchar Reporte
-                    </button>
-                    <button onclick="detenerVoz()" style="background-color: #E74C3C; color: white; padding: 8px 16px; border: none; border-radius: 5px; cursor: pointer; font-size: 14px; margin-left: 8px;">
-                        ⏹️ Detener Audio
-                    </button>
-                </div>
-
-                <script>
-                    function reproducirVoz() {{
-                        window.speechSynthesis.cancel();
-                        const texto = {clean_text_json};
-                        const lectura = new SpeechSynthesisUtterance(texto);
-                        lectura.lang = 'es-ES';
-                        lectura.rate = 1.0;
-                        window.speechSynthesis.speak(lectura);
-                    }}
-
-                    function detenerVoz() {{
-                        window.speechSynthesis.cancel();
-                    }}
-                </script>
-                """
-                components.html(tts_component, height=110)
+                st.markdown(response.choices[0].message.content)
 
             except Exception as e:
                 st.error(f"Error al conectar con la API ({proveedor_ia}): {e}")
