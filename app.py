@@ -15,9 +15,22 @@ st.title("🛡️ Dashboard de Monitoreo de Fraude con IA (Groq)")
 # 1. Carga de Datos y Configuración de Groq
 st.sidebar.header("📂 Configuración y Filtros")
 
-# Input para API Key de Groq
+# Input para API Key y Selector de Modelo de Groq
 groq_api_key = st.sidebar.text_input("Groq API Key", type="password", help="Obtén tu API key en console.groq.com")
 
+groq_model = st.sidebar.selectbox(
+    "Modelo de Groq",
+    [
+        "llama-3.1-70b-versatile",
+        "llama3-70b-8192",
+        "llama-3.2-3b-preview",
+        "mixtral-8x7b-32768",
+        "gemma2-9b-it"
+    ],
+    index=0
+)
+
+# Carga de Dataset
 uploaded_file = st.sidebar.file_uploader("Cargar dataset CSV", type=["csv"])
 
 if uploaded_file is not None:
@@ -149,11 +162,10 @@ if st.button("🚀 Generar Reporte de Insights con Groq"):
     else:
         with st.spinner("Analizando transacciones y consultando a Groq AI..."):
             try:
-                # Resumen estadístico abreviado para el Prompt
                 top_categorias_fraude = df_filtered[df_filtered["fraude"] == 1]["categoria_comercio"].value_counts().to_dict()
                 top_ciudades_fraude = df_filtered[df_filtered["fraude"] == 1]["ciudad"].value_counts().to_dict()
                 autenticacion_fraude = df_filtered[df_filtered["fraude"] == 1]["tipo_autenticacion"].value_counts().to_dict()
-                monto_fraude_promedio = df_filtered[df_filtered["fraude"] == 1]["valor_transaccion"].mean()
+                monto_fraude_promedio = df_filtered[df_filtered["fraude"] == 1]["valor_transaccion"].mean() if casos_fraude > 0 else 0
                 
                 contexto_prompt = f"""
                 Actúa como un Analista Senior de Riesgo Financiero y Prevención de Fraude.
@@ -175,7 +187,7 @@ if st.button("🚀 Generar Reporte de Insights con Groq"):
 
                 client = Groq(api_key=groq_api_key)
                 response = client.chat.completions.create(
-                    model="llama-3.3-70b-versatile",
+                    model=groq_model,
                     messages=[{"role": "user", "content": contexto_prompt}],
                     temperature=0.3
                 )
