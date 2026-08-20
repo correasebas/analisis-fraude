@@ -1,19 +1,23 @@
 import streamlit as st
 import pandas as pd
 import plotly.express as px
+from groq import Groq
 
 # Configuración de la página
 st.set_page_config(
-    page_title="Análisis de Fraude Transaccional",
+    page_title="Análisis de Fraude Transaccional + Groq AI",
     page_icon="🛡️",
     layout="wide"
 )
 
-st.title("🛡️ Dashboard de Monitoreo y Análisis de Fraude")
-st.markdown("Analiza patrones transaccionales, detecta anomalias y genera reportes interactivos.")
+st.title("🛡️ Dashboard de Monitoreo de Fraude con IA (Groq)")
 
-# 1. Carga de Datos
+# 1. Carga de Datos y Configuración de Groq
 st.sidebar.header("📂 Configuración y Filtros")
+
+# Input para API Key de Groq
+groq_api_key = st.sidebar.text_input("Groq API Key", type="password", help="Obtén tu API key en console.groq.com")
+
 uploaded_file = st.sidebar.file_uploader("Cargar dataset CSV", type=["csv"])
 
 if uploaded_file is not None:
@@ -24,6 +28,10 @@ else:
     except FileNotFoundError:
         st.warning("⚠️ Sube un archivo CSV desde la barra lateral para comenzar.")
         st.stop()
+
+# Configuración de Reporte IA
+st.sidebar.subheader("🤖 Configuración de Reporte IA")
+num_insights = st.sidebar.slider("Número de Insights a generar", min_value=1, max_value=10, value=5)
 
 # 2. Filtros Dinámicos
 ciudades_opt = ["Todas"] + list(df["ciudad"].dropna().unique())
@@ -77,12 +85,8 @@ with tab1:
         fraude_cat = df_filtered.groupby(["categoria_comercio", "fraude"]).size().reset_index(name="conteo")
         fraude_cat["fraude_label"] = fraude_cat["fraude"].map({0: "Normal", 1: "Fraude"})
         fig1 = px.bar(
-            fraude_cat, 
-            x="categoria_comercio", 
-            y="conteo", 
-            color="fraude_label", 
-            barmode="group",
-            title="Transacciones por Categoría de Comercio",
+            fraude_cat, x="categoria_comercio", y="conteo", color="fraude_label", 
+            barmode="group", title="Transacciones por Categoría de Comercio",
             color_discrete_map={"Normal": "#2ECC71", "Fraude": "#E74C3C"}
         )
         st.plotly_chart(fig1, use_container_width=True)
@@ -91,22 +95,15 @@ with tab1:
         fraude_ciudad = df_filtered.groupby(["ciudad", "fraude"]).size().reset_index(name="conteo")
         fraude_ciudad["fraude_label"] = fraude_ciudad["fraude"].map({0: "Normal", 1: "Fraude"})
         fig2 = px.bar(
-            fraude_ciudad, 
-            x="ciudad", 
-            y="conteo", 
-            color="fraude_label", 
-            barmode="stack",
-            title="Distribución de Fraude por Ciudad",
+            fraude_ciudad, x="ciudad", y="conteo", color="fraude_label", 
+            barmode="stack", title="Distribución de Fraude por Ciudad",
             color_discrete_map={"Normal": "#3498DB", "Fraude": "#E74C3C"}
         )
         st.plotly_chart(fig2, use_container_width=True)
 
 with tab2:
     fig3 = px.box(
-        df_filtered, 
-        x="fraude", 
-        y="valor_transaccion", 
-        color="fraude",
+        df_filtered, x="fraude", y="valor_transaccion", color="fraude",
         labels={"fraude": "Es Fraude", "valor_transaccion": "Monto ($)"},
         title="Comparación del Valor de Transacción: Normal vs. Fraude",
         color_discrete_map={0: "#2ECC71", 1: "#E74C3C"}
@@ -117,10 +114,8 @@ with tab3:
     col_c, col_d = st.columns(2)
     with col_c:
         aut_fig = px.pie(
-            df_filtered, 
-            names="tipo_autenticacion", 
-            title="Tipos de Autenticación Utilizados",
-            hole=0.4
+            df_filtered, names="tipo_autenticacion", 
+            title="Tipos de Autenticación Utilizados", hole=0.4
         )
         st.plotly_chart(aut_fig, use_container_width=True)
     
@@ -131,42 +126,74 @@ with tab3:
         hab_data["fraude_label"] = hab_data["fraude"].map({0: "Normal", 1: "Fraude"})
         
         hab_melted = pd.melt(
-            hab_data, 
-            id_vars=["fraude_label"], 
+            hab_data, id_vars=["fraude_label"], 
             value_vars=["ubicacion_habitual", "horario_habitual", "categoria_habitual"],
-            var_name="Variable", 
-            value_name="Porcentaje_Habitual"
+            var_name="Variable", value_name="Porcentaje_Habitual"
         )
         fig4 = px.bar(
-            hab_melted, 
-            x="Variable", 
-            y="Porcentaje_Habitual", 
-            color="fraude_label", 
-            barmode="group",
-            title="% Cumplimiento de Hábitos Normales",
+            hab_melted, x="Variable", y="Porcentaje_Habitual", color="fraude_label", 
+            barmode="group", title="% Cumplimiento de Hábitos Normales",
             color_discrete_map={"Normal": "#2ECC71", "Fraude": "#E74C3C"}
         )
         st.plotly_chart(fig4, use_container_width=True)
 
-# 5. Exportación de Informe y Tabla de Datos
+# 5. Generación de Reporte con Groq AI
 st.markdown("---")
-st.subheader("📋 Detalle de Transacciones e Informe")
+st.subheader("🤖 Generación de Reporte Ejecutivo con Groq AI")
 
-# Resumen ejecutivo en texto
-total_monto_fraude = df_filtered[df_filtered["fraude"] == 1]["valor_transaccion"].sum()
-st.info(
-    f"**Resumen Ejecutivo del Filtro Actual:**\n"
-    f"- Total transacciones analizadas: **{total_transacciones}**\n"
-    f"- Total casos de fraude identificados: **{casos_fraude}**\n"
-    f"- Pérdida / Riesgo por fraude detectado: **${total_monto_fraude:,.0f} COP**"
-)
+if st.button("🚀 Generar Reporte de Insights con Groq"):
+    if not groq_api_key:
+        st.error("⚠️ Por favor ingresa tu **Groq API Key** en la barra lateral.")
+    elif df_filtered.empty:
+        st.warning("⚠️ No hay datos para analizar con los filtros seleccionados.")
+    else:
+        with st.spinner("Analizando transacciones y consultando a Groq AI..."):
+            try:
+                # Resumen estadístico abreviado para el Prompt
+                top_categorias_fraude = df_filtered[df_filtered["fraude"] == 1]["categoria_comercio"].value_counts().to_dict()
+                top_ciudades_fraude = df_filtered[df_filtered["fraude"] == 1]["ciudad"].value_counts().to_dict()
+                autenticacion_fraude = df_filtered[df_filtered["fraude"] == 1]["tipo_autenticacion"].value_counts().to_dict()
+                monto_fraude_promedio = df_filtered[df_filtered["fraude"] == 1]["valor_transaccion"].mean()
+                
+                contexto_prompt = f"""
+                Actúa como un Analista Senior de Riesgo Financiero y Prevención de Fraude.
+                Analiza las siguientes métricas del dataset filtrado:
+                
+                - Total Transacciones Evaluadas: {total_transacciones}
+                - Transacciones Fraudulentas: {casos_fraude} ({tasa_fraude:.2f}%)
+                - Monto Total en Riesgo/Fraude: ${df_filtered[df_filtered['fraude'] == 1]['valor_transaccion'].sum():,.0f} COP
+                - Monto Promedio de Fraude: ${monto_fraude_promedio:,.0f} COP
+                - Distribución de Fraude por Categoría: {top_categorias_fraude}
+                - Distribución de Fraude por Ciudad: {top_ciudades_fraude}
+                - Métodos de Autenticación en Fraudes: {autenticacion_fraude}
+                
+                Instrucciones:
+                Genera exactamente **{num_insights} insights clave ejecutivos** numerados.
+                Cada insight debe ser directo, accionable y basado exclusivamente en los datos provistos.
+                Agrega al final una sección breve con **Recomendaciones de Mitigación**.
+                """
 
+                client = Groq(api_key=groq_api_key)
+                response = client.chat.completions.create(
+                    model="llama-3.3-70b-versatile",
+                    messages=[{"role": "user", "content": contexto_prompt}],
+                    temperature=0.3
+                )
+
+                st.success("✅ Reporte generado exitosamente:")
+                st.markdown(response.choices[0].message.content)
+
+            except Exception as e:
+                st.error(f"Error al conectar con Groq API: {e}")
+
+# 6. Tabla de Datos y Descarga
+st.markdown("---")
+st.subheader("📋 Detalle de Transacciones")
 st.dataframe(df_filtered, use_container_width=True)
 
-# Botón de descarga
 csv_data = df_filtered.to_csv(index=False).encode('utf-8')
 st.download_button(
-    label="📥 Descargar Informe Filtrado en CSV",
+    label="📥 Descargar CSV Filtrado",
     data=csv_data,
     file_name="informe_transacciones_filtrado.csv",
     mime="text/csv"
