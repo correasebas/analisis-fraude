@@ -1,35 +1,51 @@
 import streamlit as st
+import streamlit.components.v1 as components
 import pandas as pd
 import plotly.express as px
+import json
+from openai import OpenAI
 from groq import Groq
 
 # Configuración de la página
 st.set_page_config(
-    page_title="Análisis de Fraude Transaccional + Groq AI",
+    page_title="Análisis de Fraude Transaccional + IA & Voz",
     page_icon="🛡️",
     layout="wide"
 )
 
-st.title("🛡️ Dashboard de Monitoreo de Fraude con IA (Groq)")
+st.title("🛡️ Dashboard de Monitoreo de Fraude con IA y Narración de Voz")
 
-# 1. Carga de Datos y Configuración de Groq
-st.sidebar.header("📂 Configuración y Filtros")
+# 1. Carga de Datos y Configuración de Proveedor de IA
+st.sidebar.header("⚙️ Proveedor de IA y Claves")
 
-# Input para API Key y Selector de Modelo de Groq
-groq_api_key = st.sidebar.text_input("Groq API Key", type="password", help="Obtén tu API key en console.groq.com")
-
-groq_model = st.sidebar.selectbox(
-    "Modelo de Groq",
-    [
-        "llama-3.1-70b-versatile",
-        "llama3-70b-8192",
-        "llama-3.2-3b-preview",
-        "mixtral-8x7b-32768",
-        "gemma2-9b-it",
-        "openai/gpt-oss-120b"
-    ],
-    index=0
+proveedor_ia = st.sidebar.radio(
+    "Selecciona el Proveedor de IA",
+    ["Groq AI", "OpenAI (Directo)"]
 )
+
+if proveedor_ia == "Groq AI":
+    api_key = st.sidebar.text_input("Groq API Key", type="password", help="Obtén tu API key en console.groq.com")
+    model_selected = st.sidebar.selectbox(
+        "Modelo en Groq",
+        [
+            "openai/gpt-oss-120b",
+            "openai/gpt-oss-20b",
+            "llama-3.3-70b-versatile",
+            "llama-3.1-8b-instant",
+            "mixtral-8x7b-32768"
+        ],
+        index=0
+    )
+else:
+    api_key = st.sidebar.text_input("OpenAI API Key", type="password", help="Obtén tu API key en platform.openai.com")
+    model_selected = st.sidebar.selectbox(
+        "Modelo de OpenAI",
+        ["gpt-4o-mini", "gpt-4o", "gpt-3.5-turbo"],
+        index=0
+    )
+
+st.sidebar.markdown("---")
+st.sidebar.header("📂 Carga de Datos")
 
 # Carga de Dataset
 uploaded_file = st.sidebar.file_uploader("Cargar dataset CSV", type=["csv"])
@@ -43,8 +59,8 @@ else:
         st.warning("⚠️ Sube un archivo CSV desde la barra lateral para comenzar.")
         st.stop()
 
-# Configuración de Reporte IA
-st.sidebar.subheader("🤖 Configuración de Reporte IA")
+# Configuración del Reporte
+st.sidebar.subheader("🤖 Configuración de Insights")
 num_insights = st.sidebar.slider("Número de Insights a generar", min_value=1, max_value=10, value=5)
 
 # 2. Filtros Dinámicos
@@ -59,7 +75,7 @@ tipo_fraude_sel = st.sidebar.radio(
     ["Todas", "Solo Fraude (1)", "Normales (0)"]
 )
 
-# Aplicar filtros
+# Aplicar filtros al DataFrame
 df_filtered = df.copy()
 
 if ciudad_sel != "Todas":
@@ -91,7 +107,7 @@ st.markdown("---")
 # 4. Gráficos Interactivos
 st.subheader("📈 Análisis de Patrones y Comportamiento")
 
-tab1, tab2, tab3 = st.tabs(["🚨 Fraude por Categoria y Ciudad", "💰 Distribución del Valor", "🔑 Autenticación y Hábitos"])
+tab1, tab2, tab3 = st.tabs(["🚨 Fraude por Categoría y Ciudad", "💰 Distribución del Valor", "🔑 Autenticación y Hábitos"])
 
 with tab1:
     col_a, col_b = st.columns(2)
@@ -134,34 +150,35 @@ with tab3:
         st.plotly_chart(aut_fig, use_container_width=True)
     
     with col_d:
-        hab_data = df_filtered.groupby("fraude")[["ubicacion_habitual", "horario_habitual", "categoria_habitual"]].apply(
-            lambda x: (x == "Sí").mean() * 100
-        ).reset_index()
-        hab_data["fraude_label"] = hab_data["fraude"].map({0: "Normal", 1: "Fraude"})
-        
-        hab_melted = pd.melt(
-            hab_data, id_vars=["fraude_label"], 
-            value_vars=["ubicacion_habitual", "horario_habitual", "categoria_habitual"],
-            var_name="Variable", value_name="Porcentaje_Habitual"
-        )
-        fig4 = px.bar(
-            hab_melted, x="Variable", y="Porcentaje_Habitual", color="fraude_label", 
-            barmode="group", title="% Cumplimiento de Hábitos Normales",
-            color_discrete_map={"Normal": "#2ECC71", "Fraude": "#E74C3C"}
-        )
-        st.plotly_chart(fig4, use_container_width=True)
+        if not df_filtered.empty:
+            hab_data = df_filtered.groupby("fraude")[["ubicacion_habitual", "horario_habitual", "categoria_habitual"]].apply(
+                lambda x: (x == "Sí").mean() * 100
+            ).reset_index()
+            hab_data["fraude_label"] = hab_data["fraude"].map({0: "Normal", 1: "Fraude"})
+            
+            hab_melted = pd.melt(
+                hab_data, id_vars=["fraude_label"], 
+                value_vars=["ubicacion_habitual", "horario_habitual", "categoria_habitual"],
+                var_name="Variable", value_name="Porcentaje_Habitual"
+            )
+            fig4 = px.bar(
+                hab_melted, x="Variable", y="Porcentaje_Habitual", color="fraude_label", 
+                barmode="group", title="% Cumplimiento de Hábitos Normales",
+                color_discrete_map={"Normal": "#2ECC71", "Fraude": "#E74C3C"}
+            )
+            st.plotly_chart(fig4, use_container_width=True)
 
-# 5. Generación de Reporte con Groq AI
+# 5. Generación de Reporte con IA y Narración de Voz
 st.markdown("---")
-st.subheader("🤖 Generación de Reporte Ejecutivo con Groq AI")
+st.subheader("🤖 Generación de Reporte Ejecutivo y Narración de Voz")
 
-if st.button("🚀 Generar Reporte de Insights con Groq"):
-    if not groq_api_key:
-        st.error("⚠️ Por favor ingresa tu **Groq API Key** en la barra lateral.")
+if st.button("🚀 Generar Reporte de Insights"):
+    if not api_key:
+        st.error(f"⚠️ Por favor ingresa tu API Key de **{proveedor_ia}** en la barra lateral.")
     elif df_filtered.empty:
         st.warning("⚠️ No hay datos para analizar con los filtros seleccionados.")
     else:
-        with st.spinner("Analizando transacciones y consultando a Groq AI..."):
+        with st.spinner(f"Analizando transacciones con {proveedor_ia} ({model_selected})..."):
             try:
                 top_categorias_fraude = df_filtered[df_filtered["fraude"] == 1]["categoria_comercio"].value_counts().to_dict()
                 top_ciudades_fraude = df_filtered[df_filtered["fraude"] == 1]["ciudad"].value_counts().to_dict()
@@ -175,7 +192,7 @@ if st.button("🚀 Generar Reporte de Insights con Groq"):
                 - Total Transacciones Evaluadas: {total_transacciones}
                 - Transacciones Fraudulentas: {casos_fraude} ({tasa_fraude:.2f}%)
                 - Monto Total en Riesgo/Fraude: ${df_filtered[df_filtered['fraude'] == 1]['valor_transaccion'].sum():,.0f} COP
-                - Monto Promedio de Fraude: ${monto_fraude_promedio:,.0f} COP
+                - Monto Promedio de Fraude: ${monto_promedio:,.0f} COP
                 - Distribución de Fraude por Categoría: {top_categorias_fraude}
                 - Distribución de Fraude por Ciudad: {top_ciudades_fraude}
                 - Métodos de Autenticación en Fraudes: {autenticacion_fraude}
@@ -186,18 +203,54 @@ if st.button("🚀 Generar Reporte de Insights con Groq"):
                 Agrega al final una sección breve con **Recomendaciones de Mitigación**.
                 """
 
-                client = Groq(api_key=groq_api_key)
+                if proveedor_ia == "OpenAI (Directo)":
+                    client = OpenAI(api_key=api_key)
+                else:
+                    client = Groq(api_key=api_key)
+
                 response = client.chat.completions.create(
-                    model=groq_model,
+                    model=model_selected,
                     messages=[{"role": "user", "content": contexto_prompt}],
                     temperature=0.3
                 )
 
+                reporte_texto = response.choices[0].message.content
+
                 st.success("✅ Reporte generado exitosamente:")
-                st.markdown(response.choices[0].message.content)
+                st.markdown(reporte_texto)
+
+                # Integración con Web Speech API
+                clean_text_json = json.dumps(reporte_texto)
+                tts_component = f"""
+                <div style="margin-top: 15px; padding: 10px; background-color: #f0f2f6; border-radius: 8px;">
+                    <p style="margin-bottom: 8px; font-weight: bold; color: #31333F;">🗣️ Narración con Web Speech API:</p>
+                    <button onclick="reproducirVoz()" style="background-color: #2ECC71; color: white; padding: 8px 16px; border: none; border-radius: 5px; cursor: pointer; font-size: 14px;">
+                        🔊 Escuchar Reporte
+                    </button>
+                    <button onclick="detenerVoz()" style="background-color: #E74C3C; color: white; padding: 8px 16px; border: none; border-radius: 5px; cursor: pointer; font-size: 14px; margin-left: 8px;">
+                        ⏹️ Detener Audio
+                    </button>
+                </div>
+
+                <script>
+                    function reproducirVoz() {{
+                        window.speechSynthesis.cancel();
+                        const texto = {clean_text_json};
+                        const lectura = new SpeechSynthesisUtterance(texto);
+                        lectura.lang = 'es-ES';
+                        lectura.rate = 1.0;
+                        window.speechSynthesis.speak(lectura);
+                    }}
+
+                    function detenerVoz() {{
+                        window.speechSynthesis.cancel();
+                    }}
+                </script>
+                """
+                components.html(tts_component, height=110)
 
             except Exception as e:
-                st.error(f"Error al conectar con Groq API: {e}")
+                st.error(f"Error al conectar con la API ({proveedor_ia}): {e}")
 
 # 6. Tabla de Datos y Descarga
 st.markdown("---")
