@@ -1,6 +1,7 @@
 import streamlit as st
 import pandas as pd
 import plotly.express as px
+import plotly.graph_objects as go
 from groq import Groq
 
 # Configuración de la página
@@ -10,28 +11,44 @@ st.set_page_config(
     layout="wide"
 )
 
-st.title("🛡️ Dashboard de Monitoreo de Fraude con IA (Groq)")
+# Paleta de Colores Profesional / Corporativa
+COLOR_NORMAL = "#1B365D"      # Azul Marino Financiero
+COLOR_FRAUDE = "#D9381E"      # Rojo Carmesí / Alerta
+COLOR_FONDO = "#F8F9FA"       # Gris Claro Limpio
+COLOR_TEXTO = "#2C3E50"       # Gris Oscuro Profesional
+COLOR_ACENTO = "#008080"      # Verde Azulado (Teal) para neutros
+
+# Plantilla de diseño para Plotly
+PLANTILLA_PLOTLY = dict(
+    layout=go.Layout(
+        font=dict(family="Arial, sans-serif", size=13, color=COLOR_TEXTO),
+        paper_bgcolor="rgba(0,0,0,0)",
+        plot_bgcolor="rgba(0,0,0,0)",
+        margin=dict(l=40, r=40, t=50, b=40),
+        xaxis=dict(showgrid=True, gridcolor="#E5E8E8", title_font=dict(size=12, color=COLOR_TEXTO)),
+        yaxis=dict(showgrid=True, gridcolor="#E5E8E8", title_font=dict(size=12, color=COLOR_TEXTO)),
+        legend=dict(title_font=dict(size=11, color=COLOR_TEXTO), font=dict(size=11))
+    )
+)
+
+st.title("🛡️ Dashboard de Monitoreo de Fraude")
 
 # 1. Carga de Datos y Configuración de Groq
 st.sidebar.header("📂 Configuración y Filtros")
 
-# Input para API Key y Selector de Modelo de Groq
 groq_api_key = st.sidebar.text_input("Groq API Key", type="password", help="Obtén tu API key en console.groq.com")
 
 groq_model = st.sidebar.selectbox(
     "Modelo de Groq",
     [
-        "openai/gpt-oss-120b",
-        "llama-3.1-70b-versatile",
-        "llama3-70b-8192",
-        "llama-3.2-3b-preview",
+        "llama-3.3-70b-versatile",
+        "llama-3.1-8b-instant",
         "mixtral-8x7b-32768",
         "gemma2-9b-it"
     ],
     index=0
 )
 
-# Carga de Dataset
 uploaded_file = st.sidebar.file_uploader("Cargar dataset CSV", type=["csv"])
 
 if uploaded_file is not None:
@@ -75,9 +92,9 @@ elif tipo_fraude_sel == "Normales (0)":
 
 # 3. Métricas Principales (KPIs)
 total_transacciones = len(df_filtered)
-total_monto = df_filtered["valor_transaccion"].sum()
+total_monto = df_filtered["valor_transaccion"].sum() if total_transacciones > 0 else 0
 monto_promedio = df_filtered["valor_transaccion"].mean() if total_transacciones > 0 else 0
-casos_fraude = (df_filtered["fraude"] == 1).sum()
+casos_fraude = (df_filtered["fraude"] == 1).sum() if total_transacciones > 0 else 0
 tasa_fraude = (casos_fraude / total_transacciones * 100) if total_transacciones > 0 else 0
 
 col1, col2, col3, col4 = st.columns(4)
@@ -88,31 +105,37 @@ col4.metric("Tasa de Fraude", f"{tasa_fraude:.1f}%", delta=f"{casos_fraude} caso
 
 st.markdown("---")
 
-# 4. Gráficos Interactivos
+# 4. Gráficos Interactivos con Estilo Profesional
 st.subheader("📈 Análisis de Patrones y Comportamiento")
 
-tab1, tab2, tab3 = st.tabs(["🚨 Fraude por Categoria y Ciudad", "💰 Distribución del Valor", "🔑 Autenticación y Hábitos"])
+tab1, tab2, tab3 = st.tabs(["🚨 Fraude por Categoría y Ciudad", "💰 Distribución del Valor", "🔑 Autenticación y Hábitos"])
 
 with tab1:
     col_a, col_b = st.columns(2)
     with col_a:
         fraude_cat = df_filtered.groupby(["categoria_comercio", "fraude"]).size().reset_index(name="conteo")
         fraude_cat["fraude_label"] = fraude_cat["fraude"].map({0: "Normal", 1: "Fraude"})
+        
         fig1 = px.bar(
             fraude_cat, x="categoria_comercio", y="conteo", color="fraude_label", 
             barmode="group", title="Transacciones por Categoría de Comercio",
-            color_discrete_map={"Normal": "#2ECC71", "Fraude": "#E74C3C"}
+            color_discrete_map={"Normal": COLOR_NORMAL, "Fraude": COLOR_FRAUDE}
         )
+        fig1.update_layout(PLANTILLA_PLOTLY["layout"])
+        fig1.update_traces(marker_line_width=0, opacity=0.9)
         st.plotly_chart(fig1, use_container_width=True)
 
     with col_b:
         fraude_ciudad = df_filtered.groupby(["ciudad", "fraude"]).size().reset_index(name="conteo")
         fraude_ciudad["fraude_label"] = fraude_ciudad["fraude"].map({0: "Normal", 1: "Fraude"})
+        
         fig2 = px.bar(
             fraude_ciudad, x="ciudad", y="conteo", color="fraude_label", 
             barmode="stack", title="Distribución de Fraude por Ciudad",
-            color_discrete_map={"Normal": "#3498DB", "Fraude": "#E74C3C"}
+            color_discrete_map={"Normal": COLOR_NORMAL, "Fraude": COLOR_FRAUDE}
         )
+        fig2.update_layout(PLANTILLA_PLOTLY["layout"])
+        fig2.update_traces(marker_line_width=0, opacity=0.9)
         st.plotly_chart(fig2, use_container_width=True)
 
 with tab2:
@@ -120,8 +143,10 @@ with tab2:
         df_filtered, x="fraude", y="valor_transaccion", color="fraude",
         labels={"fraude": "Es Fraude", "valor_transaccion": "Monto ($)"},
         title="Comparación del Valor de Transacción: Normal vs. Fraude",
-        color_discrete_map={0: "#2ECC71", 1: "#E74C3C"}
+        color_discrete_map={0: COLOR_NORMAL, 1: COLOR_FRAUDE}
     )
+    fig3.update_layout(PLANTILLA_PLOTLY["layout"])
+    fig3.update_traces(marker_outline_width=1)
     st.plotly_chart(fig3, use_container_width=True)
 
 with tab3:
@@ -129,27 +154,40 @@ with tab3:
     with col_c:
         aut_fig = px.pie(
             df_filtered, names="tipo_autenticacion", 
-            title="Tipos de Autenticación Utilizados", hole=0.4
+            title="Tipos de Autenticación Utilizados", hole=0.5,
+            color_discrete_sequence=[COLOR_NORMAL, COLOR_ACENTO, "#5D6D7E", "#A569BD"]
         )
+        aut_fig.update_layout(PLANTILLA_PLOTLY["layout"])
+        aut_fig.update_traces(textposition='inside', textinfo='percent+label', marker=dict(line=dict(color='#FFFFFF', width=2)))
         st.plotly_chart(aut_fig, use_container_width=True)
     
     with col_d:
-        hab_data = df_filtered.groupby("fraude")[["ubicacion_habitual", "horario_habitual", "categoria_habitual"]].apply(
-            lambda x: (x == "Sí").mean() * 100
-        ).reset_index()
-        hab_data["fraude_label"] = hab_data["fraude"].map({0: "Normal", 1: "Fraude"})
-        
-        hab_melted = pd.melt(
-            hab_data, id_vars=["fraude_label"], 
-            value_vars=["ubicacion_habitual", "horario_habitual", "categoria_habitual"],
-            var_name="Variable", value_name="Porcentaje_Habitual"
-        )
-        fig4 = px.bar(
-            hab_melted, x="Variable", y="Porcentaje_Habitual", color="fraude_label", 
-            barmode="group", title="% Cumplimiento de Hábitos Normales",
-            color_discrete_map={"Normal": "#2ECC71", "Fraude": "#E74C3C"}
-        )
-        st.plotly_chart(fig4, use_container_width=True)
+        if not df_filtered.empty:
+            cols_habitual = ["ubicacion_habitual", "horario_habitual", "categoria_habitual"]
+            hab_data = (
+                df_filtered.assign(**{c: df_filtered[c] == "Sí" for c in cols_habitual})
+                .groupby("fraude")[cols_habitual]
+                .mean()
+                .mul(100)
+                .reset_index()
+            )
+            hab_data["fraude_label"] = hab_data["fraude"].map({0: "Normal", 1: "Fraude"})
+            
+            hab_melted = pd.melt(
+                hab_data, id_vars=["fraude_label"], 
+                value_vars=cols_habitual,
+                var_name="Variable", value_name="Porcentaje_Habitual"
+            )
+            fig4 = px.bar(
+                hab_melted, x="Variable", y="Porcentaje_Habitual", color="fraude_label", 
+                barmode="group", title="% Cumplimiento de Hábitos Normales",
+                color_discrete_map={"Normal": COLOR_NORMAL, "Fraude": COLOR_FRAUDE}
+            )
+            fig4.update_layout(PLANTILLA_PLOTLY["layout"])
+            fig4.update_traces(marker_line_width=0, opacity=0.9)
+            st.plotly_chart(fig4, use_container_width=True)
+        else:
+            st.info("Sin datos para calcular hábitos habituales.")
 
 # 5. Generación de Reporte con Groq AI
 st.markdown("---")
