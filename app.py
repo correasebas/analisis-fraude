@@ -2,8 +2,6 @@ import streamlit as st
 import pandas as pd
 import plotly.express as px
 from groq import Groq
-import streamlit.components.v1 as components
-import json
 
 # Configuración de la página
 st.set_page_config(
@@ -17,12 +15,12 @@ st.title("🛡️ Dashboard de Monitoreo de Fraude con IA (Groq)")
 # 1. Carga de Datos y Configuración de Groq
 st.sidebar.header("📂 Configuración y Filtros")
 
+# Input para API Key y Selector de Modelo de Groq
 groq_api_key = st.sidebar.text_input("Groq API Key", type="password", help="Obtén tu API key en console.groq.com")
 
 groq_model = st.sidebar.selectbox(
     "Modelo de Groq",
     [
-        "openai/gpt-oss-120b",
         "llama-3.1-70b-versatile",
         "llama3-70b-8192",
         "llama-3.2-3b-preview",
@@ -152,7 +150,7 @@ with tab3:
         )
         st.plotly_chart(fig4, use_container_width=True)
 
-# 5. Generación de Reporte con Groq AI y Narración de Voz
+# 5. Generación de Reporte con Groq AI
 st.markdown("---")
 st.subheader("🤖 Generación de Reporte Ejecutivo con Groq AI")
 
@@ -194,52 +192,8 @@ if st.button("🚀 Generar Reporte de Insights con Groq"):
                     temperature=0.3
                 )
 
-                reporte_texto = response.choices[0].message.content
                 st.success("✅ Reporte generado exitosamente:")
-                st.markdown(reporte_texto)
-
-                # --- Integración Web Speech API ---
-                json_texto = json.dumps(reporte_texto)
-                
-                speech_code = f"""
-                <div style="font-family: sans-serif; margin-top: 15px; margin-bottom: 10px;">
-                    <p style="font-weight: bold; margin-bottom: 8px; color: #333;">📢 Controles de Narración por Voz:</p>
-                    <button onclick="speakText()" style="padding: 8px 16px; margin-right: 5px; cursor: pointer; border-radius: 5px; border: none; background-color: #2ECC71; color: white; font-weight: bold;">🔊 Reproducir</button>
-                    <button onclick="pauseText()" style="padding: 8px 16px; margin-right: 5px; cursor: pointer; border-radius: 5px; border: none; background-color: #F39C12; color: white; font-weight: bold;">⏸️ Pausar</button>
-                    <button onclick="resumeText()" style="padding: 8px 16px; margin-right: 5px; cursor: pointer; border-radius: 5px; border: none; background-color: #3498DB; color: white; font-weight: bold;">▶️ Continuar</button>
-                    <button onclick="stopText()" style="padding: 8px 16px; cursor: pointer; border-radius: 5px; border: none; background-color: #E74C3C; color: white; font-weight: bold;">⏹️ Detener</button>
-                </div>
-
-                <script>
-                    const textToRead = {json_texto};
-
-                    function speakText() {{
-                        window.speechSynthesis.cancel();
-                        const cleanText = textToRead.replace(/[*#_`-]/g, ''); // Remueve sintaxis Markdown para lectura fluida
-                        const utterance = new SpeechSynthesisUtterance(cleanText);
-                        utterance.lang = 'es-ES';
-                        utterance.rate = 1.0;
-                        window.speechSynthesis.speak(utterance);
-                    }}
-
-                    function pauseText() {{
-                        if (window.speechSynthesis.speaking && !window.speechSynthesis.paused) {{
-                            window.speechSynthesis.pause();
-                        }}
-                    }}
-
-                    function resumeText() {{
-                        if (window.speechSynthesis.paused) {{
-                            window.speechSynthesis.resume();
-                        }}
-                    }}
-
-                    function stopText() {{
-                        window.speechSynthesis.cancel();
-                    }}
-                </script>
-                """
-                components.html(speech_code, height=90)
+                st.markdown(response.choices[0].message.content)
 
             except Exception as e:
                 st.error(f"Error al conectar con Groq API: {e}")
