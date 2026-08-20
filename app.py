@@ -21,6 +21,7 @@ groq_api_key = st.sidebar.text_input("Groq API Key", type="password", help="Obt√
 groq_model = st.sidebar.selectbox(
     "Modelo de Groq",
     [
+        "openai/gpt-oss-120b",
         "llama-3.1-70b-versatile",
         "llama3-70b-8192",
         "llama-3.2-3b-preview",
